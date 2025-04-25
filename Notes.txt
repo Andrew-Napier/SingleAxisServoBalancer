@@ -1,0 +1,7 @@
+Looking at the writing on the battery side of the PCB, 
+
+J5 & J7 are 3.3V
+J4 & J6 are 5V
+
+with the battery to the rear of the board, the positive pin is on the left, 
+negative/ground on the right.
