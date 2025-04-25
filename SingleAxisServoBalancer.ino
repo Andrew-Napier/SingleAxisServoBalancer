@@ -31,12 +31,6 @@ void setup() {
   Serial.begin(9600);
   Serial.println("MMA8452Q Basic Stepper driving Code!");
 
-  Serial.println("Driving stepper to midpoint...");
-  stepper.moveTo(0);
-  stepper.setAcceleration(250);
-  stepper.setMaxSpeed(rpmToStepsPerSecond(5));
-  // Blocking until position set.
-  stepper.runToPosition();
   Setpoint = 0;
 
   Wire.begin();
@@ -49,6 +43,7 @@ void setup() {
     Serial.print(attempt++);
     delay(1000);
   }
+  Serial.println("Accelerometer ready");
   //  ODR_6 means set sample rate to 6.25Hz
   //  ODR_12 means set sample rate to 12.5Hz
   //  ODR_50 50Hz
@@ -62,6 +57,14 @@ void setup() {
   // Misc PID settings
   myPID.SetMode(AUTOMATIC);
   myPID.SetOutputLimits(-90.0, 90.0);
+
+  Serial.println("Driving stepper to midpoint...");
+  stepper.moveTo(0);
+  stepper.setMaxSpeed(rpmToStepsPerSecond(5));
+  stepper.setAcceleration(250);
+  // Blocking until position set.
+  stepper.run();
+
 }
 
 void loop() {
@@ -78,6 +81,7 @@ void loop() {
     // cameraAngle = Output;  //- Input;
     // Update the stepper.
     //stepperAngle = map(Output, 90, -90, 0, 180);
+    debugLog();
 
     if (stepper.isRunning()) {
       // Stepper is still heading for last angle.
