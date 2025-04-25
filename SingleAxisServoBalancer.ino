@@ -1,23 +1,22 @@
 #include <Servo.h>
 #include <Wire.h>               // Must include Wire library for I2C
 #include "SparkFun_MMA8452Q.h"  // Click here to get the library: http://librarymanager/All#SparkFun_MMA8452Q
-
+#include <AccelStepper.h>
 #include <PID_v1.h>
 
 MMA8452Q accel;  // create instance of the MMA8452 class
-Servo myservo;   // create servo object to control a servo
 
 
 //Define Variables we'll be connecting to in PID library
 double Setpoint, Input, Output;
-const int DELTA_LIMIT = 25;
 
 // Timing variables
 unsigned long timingVar;
 double pidTimingInterval;
 
-// Servo angles
-int servoAngle, lastServoAngle = 0;
+// Stepper angle
+int stepperAngle = 0;
+const int stepsPerRevolution = 2048;
 
 //Define Tuning Parameters
 double Kp = 1, Ki = 0.05, Kd = 0.25;
@@ -26,23 +25,29 @@ int potPin = A0;  // Input pin from the potentiometer
 
 //Specify the links and initial tuning parameters
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
-
+AccelStepper stepper = AccelStepper(AccelStepper::FULL4WIRE, 8, 10, 9, 11);
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("MMA8452Q Basic Servo driving Code!");
+  Serial.println("MMA8452Q Basic Stepper driving Code!");
 
-  Serial.println("Driving servo to midpoint...");
-  myservo.attach(9);  // attaches the servo on pin 9 to the servo object
-  myservo.write(90);  // start the servo at its mid-point
+  Serial.println("Driving stepper to midpoint...");
+  stepper.moveTo(0);
+  stepper.setAcceleration(250);
+  stepper.setMaxSpeed(rpmToStepsPerSecond(5));
+  // Blocking until position set.
+  stepper.runToPosition();
   Setpoint = 0;
 
   Wire.begin();
 
   // indefinitely stall if accelerometer isn't returning data?
+  int attempt = 0;
   while (accel.begin() == false) {
     Serial.println("Not Connected. Please check connections and read the hookup guide.");
-    delay(250);
+    Serial.print("Attempt: ");
+    Serial.print(attempt++);
+    delay(1000);
   }
   //  ODR_6 means set sample rate to 6.25Hz
   //  ODR_12 means set sample rate to 12.5Hz
@@ -71,15 +76,20 @@ void loop() {
     myPID.Compute();
 
     // cameraAngle = Output;  //- Input;
-    // Update the servo.
-    lastServoAngle = servoAngle;
-    servoAngle = map(Output, 90, -90, 0, 180);
+    // Update the stepper.
+    //stepperAngle = map(Output, 90, -90, 0, 180);
 
-    // restrict movement to a certain amount of degrees...
-    servoAngle = limitMovement(servoAngle, lastServoAngle);
+    if (stepper.isRunning()) {
+      // Stepper is still heading for last angle.
+      // Stop it now and give new instructions!
+      stepper.stop();
+    }
 
-    myservo.write(servoAngle);
+    stepper.moveTo(angleInAbsoluteSteps(Output));
+    stepper.setMaxSpeed(rpmToStepsPerSecond(5));
+    stepper.setAcceleration(250);
   }
+  stepper.run();
 }
 
 
@@ -125,16 +135,12 @@ void tunePid() {
   myPID.SetTunings(Kp, Ki, Kd);
 }
 
-int limitMovement(int requestedMovement, int lastServoAngle) {
-  int deltaLimit = DELTA_LIMIT;  //mapd(analogRead(potPin), 0, 1023, 0, 20);
+int angleInAbsoluteSteps(int angle) {
+  return map(angle, -180, 180, -stepsPerRevolution / 2, stepsPerRevolution / 2);
+}
 
-  if (requestedMovement - lastServoAngle > deltaLimit) {
-    return lastServoAngle + deltaLimit;
-  }
-  if (requestedMovement - lastServoAngle < -deltaLimit) {
-    return lastServoAngle - deltaLimit;
-  }
-  return requestedMovement;
+float rpmToStepsPerSecond(int desiredRpm) {
+  return desiredRpm * 60 * stepsPerRevolution;
 }
 
 void debugLog() {
@@ -144,14 +150,10 @@ void debugLog() {
   Serial.print(Ki, 4);
   Serial.print(",Kd=");
   Serial.print(Kd, 4);
-  Serial.print(",△Limit=");
-  Serial.print(DELTA_LIMIT);
   Serial.print(",in=");
   Serial.print(Input);
   Serial.print(",out=");
   Serial.print(Output);
-  Serial.print(",servoAngle=");
-  Serial.print(servoAngle - 90);
 
   Serial.println("");
 }
